@@ -319,22 +319,51 @@
 						}
 						let o = 1;
 						let table_code = "";
+						let notes_sum = [];
 						chart_dict.forEach((i) => {
 							//DOM操作？知らない子ですねぇ...
 							let tr = `<tr><td class="haku">${o}</td>`;
 							for (let j = 0; j < kagi_int; j++) {
 								tr += `<td${i.includes(j + 1) ? " class='note'" : ""}></td>`; //三項演算子大好き
+								notes_sum[j] =
+									(notes_sum[j] ?? 0) +
+									(i.includes(j + 1) ? 1 : 0);
 							}
 							tr += "</tr>";
 							table_code = tr + table_code;
 							o++;
 						});
+						console.log("譜面", chart_dict);
+						console.log("ノーツ数", notes_sum);
+
+						//上のバー描写
 						let haku__ = "<tr><td>拍</td>";
 						for (let j = 0; j < kagi_int; j++) {
 							haku__ += `<td>${j + 1}</td>`;
 						}
 						haku__ += "</tr>";
 						table_code = haku__ + table_code;
+						//ノーツ数計算・描写
+						let summ = 0;
+						let namuamidabutu =
+							"<tr><td class='haku'>各ノーツ数</td>";
+						notes_sum.forEach((i) => {
+							namuamidabutu += `<td>${i}</td>`;
+							summ += i;
+						});
+						namuamidabutu += "</tr>";
+						//割合計算
+						let nummyouhourenngekyou =
+							"<tr><td class='haku'>割合</td>";
+						notes_sum.forEach((i) => {
+							nummyouhourenngekyou += `<td>${Math.floor((i * 100) / summ)}%</td>`;
+						});
+						nummyouhourenngekyou += "</tr>";
+						table_code += nummyouhourenngekyou;
+						table_code += namuamidabutu; //順番変え
+						//総ノーツ数
+						table_code += `<tr><td class='haku'>総ノーツ数</td><td>${summ}</td></tr>`;
+						//innerhtml
 						res_tab.innerHTML = table_code;
 
 						window.scrollTo(
