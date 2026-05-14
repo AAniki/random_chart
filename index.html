@@ -62,7 +62,8 @@
 			条件に沿ったランダムな固定譜面を自動生成します。<br />
 			いい配置が思いつかないからインスピレーションを得たいって時に是非。再生成しまくれば運命の配置と出会えるかも...?<br />
 			フリーレーン配置とロングノーツは非対応、現状タップノーツのみです。<br />
-			エラー出るときは「縦連判定する小節数」(同時押し設定してる場合は「最大の同時押し数」「同時押し出現率」)を下げてください
+			エラー出るときは「縦連判定する小節数」(同時押し設定してる場合は「最大の同時押し数」「同時押し出現率」)を下げてください<br />
+			※試験的に譜面共有機能を実装しました。コード生成ボタンを押すと譜面を文字列化でき、そのコードを入力すると譜面が再現できます。ただし場合によっては再現ができなかったり生成ができないみたいです。
 		</p>
 		<div id="gen_form">
 			<fieldset>
@@ -148,14 +149,28 @@
 					</fieldset>
 				</div>
 			</fieldset>
+
+			<p>
+				<label
+					>譜面コードから生成：<input type="text" id="humen_code"
+				/></label>
+			</p>
 			<input type="button" id="seisei" value="生成" />
 			<h3>結果</h3>
 			<table id="resurt"></table>
+			<p id="code"></p>
 			<input type="button" id="sai_seisei" value="再生成" />
+			<input
+				type="button"
+				id="gen_code"
+				value="【ベータ版】譜面共有コードを生成"
+			/>
 		</div>
 
 		<script>
 			let debug = false;
+			current_humen = [];
+			current_kagi = 3;
 
 			let l = (...a) => console.log(...a);
 
@@ -240,7 +255,8 @@
 				let tate_int = Number(tateren_int.value);
 
 				if (
-					!isNaN(kagi_int) &&
+					humen_code_i.value === "" &&
+					(!isNaN(kagi_int) &&
 					!isNaN(syou_int) &&
 					!isNaN(douj_int) &&
 					!isNaN(douj_rat) &&
@@ -250,7 +266,7 @@
 						? douj_int <= kagi_int && 0 <= douj_rat
 						: true && tate_tf
 							? douj_rat <= 1
-							: true
+							: true)
 				) {
 					try {
 						l("VALIDATION OK");
@@ -334,6 +350,8 @@
 							o++;
 						});
 						console.log("譜面", chart_dict);
+						current_humen = chart_dict;
+						current_kagi = kagi_int;
 						console.log("ノーツ数", notes_sum);
 
 						//上のバー描写
@@ -365,7 +383,7 @@
 						table_code += `<tr><td class='haku'>総ノーツ数</td><td>${summ}</td></tr>`;
 						//innerhtml
 						res_tab.innerHTML = table_code;
-
+						document.querySelector("#code").innerText = "";
 						window.scrollTo(
 							0,
 							document.documentElement.scrollHeight,
@@ -375,7 +393,279 @@
 							"計算エラー！入力された値に問題があるようです...",
 						);
 					}
+				} else if (humen_code_i.value !== "") {
+					let resur = gen_chart_fron_code(humen_code_i.value);
+					let chart_dict = resur.chart;
+					let kagi_int = resur.key;
+					//あとで共通モジュール化
+					let o = 1;
+					let table_code = "";
+					let notes_sum = [];
+					chart_dict.forEach((i) => {
+						//DOM操作？知らない子ですねぇ...
+						let tr = `<tr><td class="haku">${o}</td>`;
+						for (let j = 0; j < kagi_int; j++) {
+							tr += `<td${i.includes(j + 1) ? " class='note'" : ""}></td>`; //三項演算子大好き
+							notes_sum[j] =
+								(notes_sum[j] ?? 0) +
+								(i.includes(j + 1) ? 1 : 0);
+						}
+						tr += "</tr>";
+						table_code = tr + table_code;
+						o++;
+					});
+					console.log("譜面", chart_dict);
+					current_humen = chart_dict;
+					current_kagi = kagi_int;
+					console.log("ノーツ数", notes_sum);
+
+					//上のバー描写
+					let haku__ = "<tr><td>拍</td>";
+					for (let j = 0; j < kagi_int; j++) {
+						haku__ += `<td>${j + 1}</td>`;
+					}
+					haku__ += "</tr>";
+					table_code = haku__ + table_code;
+					//ノーツ数計算・描写
+					let summ = 0;
+					let namuamidabutu = "<tr><td class='haku'>各ノーツ数</td>";
+					notes_sum.forEach((i) => {
+						namuamidabutu += `<td>${i}</td>`;
+						summ += i;
+					});
+					namuamidabutu += "</tr>";
+					//割合計算
+					let nummyouhourenngekyou = "<tr><td class='haku'>割合</td>";
+					notes_sum.forEach((i) => {
+						nummyouhourenngekyou += `<td>${Math.floor((i * 100) / summ)}%</td>`;
+					});
+					nummyouhourenngekyou += "</tr>";
+					table_code += nummyouhourenngekyou;
+					table_code += namuamidabutu; //順番変え
+					//総ノーツ数
+					table_code += `<tr><td class='haku'>総ノーツ数</td><td>${summ}</td></tr>`;
+					//innerhtml
+					res_tab.innerHTML = table_code;
+					document.querySelector("#code").innerText = "";
+					window.scrollTo(0, document.documentElement.scrollHeight);
 				}
+			};
+			//数学大嫌いだえ
+			let ntot = (str, n) => {
+				//https://www.try-it.jp/chapters-4962/sections-5093/lessons-5114/
+				//nはString?
+				//巨大数掛け算
+				let kakezan = (c, ha) => {
+					let u = [];
+					for (let i = 0; i < c.length; i++) {
+						u.push(
+							String(Number(c[c.length - i - 1]) * ha) +
+								"0".repeat(Math.max(0, i)),
+						);
+					}
+					let st = "0";
+					u.forEach((i) => {
+						st = tasizan(st, i);
+					});
+					return st;
+				};
+				//巨大数足し算
+				let tasizan = (n1, n2) => {
+					let r = "";
+					let kurikoshi = 0;
+					let kurikaeshi = Math.max(n1.length, n2.length);
+					for (let p = 0; p < kurikaeshi; p++) {
+						let a;
+						if (n1[n1.length - p - 1] && n2[n2.length - p - 1]) {
+							a =
+								Number(n1[n1.length - p - 1]) +
+								Number(n2[n2.length - p - 1]);
+						} else {
+							a = Number.isNaN(Number(n1[n1.length - p - 1]))
+								? Number(n2[n2.length - p - 1])
+								: Number(n1[n1.length - p - 1]);
+						}
+						a += kurikoshi;
+						if (String(a).length == 1) {
+							kurikoshi = 0;
+							r = String(a) + r;
+						} else {
+							r = String(a).slice(-1) + r;
+							kurikoshi = Number(String(a).slice(0, -1));
+						}
+					}
+					if (kurikoshi !== 0) {
+						r = String(kurikoshi) + r;
+					}
+					return r;
+				};
+				//巨大数の乗算処理
+				let math_hate = (num, sisuu) => {
+					if (sisuu == 0) return "1";
+					let st = num;
+					for (let i = 0; i < sisuu - 1; i++) {
+						st = kakezan(st, num);
+					}
+					return st;
+				};
+				let resu = "";
+				for (let q = 0; q < str.length; q++) {
+					let a_ = parseInt(
+						str.slice(...(q === 0 ? [-1] : [-q - 1, -q])),
+						36,
+					);
+					let b_ = math_hate(String(n), q);
+					let c_ = kakezan(b_, a_);
+					resu = tasizan(resu, c_);
+				}
+				return resu;
+			};
+
+			let tton = (str, n) => {
+				//https://www.try-it.jp/chapters-4962/sections-5093/lessons-5122/
+				//巨大数の割り算&余り算出処理
+				/*
+				//俺よりAIの方が頭いいじゃねぇか！なんだこのコード！そして俺は考えるのをやめた
+				let warizan = (num, waru) => {
+					//あまりと計算結果を出す
+					let syou = "";
+					let current_num = num;
+					let current_amari = num.substr(0, 1);
+					let amari = ""; //最終値
+					let waruketa = 1;
+					while (true) {
+						if (current_num == "") {
+							console.log("break");
+							amari = current_amari;
+							break;
+						}
+						let nagi = Math.floor(
+							Number(current_num.substr(0, waruketa)) / waru,
+						);
+						if (nagi === 0) {
+							waruketa++;
+						} else {
+							current_amari = String(
+								current_num.substr(0, waruketa) - nagi * waru,
+							);
+							current_num = current_num.slice(waruketa);
+							current_amari += current_num.substr(0, 1);
+							current_amari=current_amari.replace(/^0+/,"")
+							syou +=
+								(syou !== "" && waruketa > 1
+									? "0".repeat(waruketa - 1)
+									: "") + String(nagi);
+							waruketa = 1;
+						}
+					}
+					return {
+						syou: syou,
+						amari: amari,
+					};
+				};
+				*/
+				let warizan = (num, waru) => {
+					let syou = "";
+					let current_num = num;
+					let current_amari = "";
+					let amari = "";
+					while (current_num.length > 0) {
+						let targets = current_amari + current_num.substr(0, 1);
+						let target_val = Number(targets);
+
+						let nagi = Math.floor(target_val / waru);
+
+						if (syou !== "" || nagi !== 0) {
+							syou += String(nagi);
+						}
+
+						current_amari = String(target_val % waru); // 新しい余り
+						current_num = current_num.slice(1); // 処理した1桁を消す
+					}
+
+					if (syou === "") syou = "0";
+					amari = current_amari === "" ? "0" : current_amari;
+
+					return {
+						syou: syou,
+						amari: amari,
+					};
+				};
+				let s = str;
+				let r = "";
+				while (true) {
+					let w = warizan(s, n);
+					r = Number(w.amari).toString(36) + r;
+					s = w.syou;
+					if (s < n) {
+						if (s != 0) r = s.toString(36) + r;
+						break;
+					}
+				}
+				return r;
+			};
+
+			let gen_chart_code = (kagi, chart) => {
+				//kagiはNumber、chartはarr
+				let code = "";
+				code += (kagi + 1).toString(36);
+				let chart_raw_code = "1";
+				chart.forEach((i) => {
+					if (i.length == 1) {
+						chart_raw_code += String(i[0]);
+					} else {
+						chart_raw_code += "0";
+						i.forEach((n) => {
+							chart_raw_code += String(n);
+						});
+						chart_raw_code += "0";
+					}
+				});
+				let ten = ntot(chart_raw_code, kagi + 1);
+				code += tton(ten, 36);
+				return code;
+			};
+
+			let gen_chart_fron_code = (code) => {
+				let key = Number(code.substr(0, 1));
+				let raw_code = code.substr(2);
+				if (isNaN(key)) {
+					alert("コードエラー");
+					return;
+				}
+				raw_code = ntot(raw_code, 36);
+				raw_code = tton(raw_code, key);
+				let multi = false;
+				let chart_dict = [];
+				let chart_mul_dict = [];
+				raw_code.split("").forEach((e) => {
+					if (multi === false && e !== "0") {
+						//特になし
+						chart_dict.push([Number(e)]);
+					} else if (multi === true && e !== "0") {
+						//multi中
+						chart_mul_dict.push(Number(e));
+					} else if (multi === false && e === "0") {
+						//multi始点
+						multi = true;
+					} else if (multi === true && e === "0") {
+						//multi終点
+						multi = false;
+						chart_dict.push(chart_mul_dict);
+						chart_mul_dict = [];
+					}
+				});
+				return {
+					chart: chart_dict,
+					key: key - 1,
+				};
+			};
+
+			let gen_coco = () => {
+				document.querySelector("#code").innerText = gen_chart_code(
+					current_kagi,
+					current_humen,
+				);
 			};
 
 			//同時押し処理tf
@@ -392,6 +682,8 @@
 			doujiosi_suu.addEventListener("input", douj_s);
 			//小節数
 			let syousetu = document.querySelector("#syousetu");
+			//譜面コード
+			let humen_code_i = document.querySelector("#humen_code");
 			//同時押し確率(%)
 			let doujiosi_rate = document.querySelector("#doujiosi_rate");
 			//縦連判定小節数
@@ -404,6 +696,9 @@
 			//ボタン
 			let sai_exc_button = document.querySelector("#sai_seisei");
 			sai_exc_button.addEventListener("click", gen_chart); //意味あるのかね
+			//βコード生成ボタン
+			let code_button = document.querySelector("#gen_code");
+			code_button.addEventListener("click", gen_coco); //意味あるのかね
 			gen_chart(); //初期生成
 		</script>
 	</body>
